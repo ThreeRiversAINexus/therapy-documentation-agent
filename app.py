@@ -192,6 +192,21 @@ def login():
     
     return jsonify({"error": "Invalid username or password"}), 401
 
+@app.route('/delete-entry/<int:entry_id>', methods=['DELETE'])
+def delete_entry(entry_id):
+    """Delete a documentation entry"""
+    if 'username' not in session:
+        return jsonify({"error": "Not logged in"}), 401
+    
+    db = get_db_connection()
+    try:
+        db.execute('DELETE FROM category_sections WHERE id = ?', (entry_id,))
+        db.commit()
+        return jsonify({"status": "success"})
+    except Exception as e:
+        print(f"Error deleting entry: {e}")
+        return jsonify({"error": "Internal server error"}), 500
+
 @app.route('/logout', methods=['POST'])
 def logout():
     """Log out the current user"""

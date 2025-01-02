@@ -136,7 +136,7 @@ class TherapyDocTools:
             
             # Get section observations from the last 2 weeks, excluding empty observations
             sections_cur = db.execute("""
-                SELECT section_name, observations, timestamp
+                SELECT id, section_name, observations, timestamp
                 FROM category_sections
                 WHERE category_id = ? 
                 AND timestamp >= datetime('now', '-14 days')
@@ -146,12 +146,13 @@ class TherapyDocTools:
             
             sections_data = {}
             for section_row in sections_cur:
-                section_name = section_row[0]
+                section_name = section_row[1]
                 if section_name not in sections_data:
                     sections_data[section_name] = []
                 sections_data[section_name].append({
-                    'observation': section_row[1],
-                    'timestamp': section_row[2]
+                    'id': section_row[0],
+                    'observation': section_row[2],
+                    'timestamp': section_row[3]
                 })
             
             return {
