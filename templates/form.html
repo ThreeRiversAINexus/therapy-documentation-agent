@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Therapy Documentation Form</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .category {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        .category h2 {
+            margin-top: 0;
+            color: #2196f3;
+        }
+        .section {
+            margin-bottom: 20px;
+        }
+        .section h3 {
+            margin-bottom: 10px;
+            color: #666;
+        }
+        textarea {
+            width: 100%;
+            min-height: 100px;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            resize: vertical;
+        }
+        .api-section {
+            background-color: #f5f5f5;
+            padding: 15px;
+            border-radius: 4px;
+        }
+        .api-section p {
+            margin: 0;
+            color: #666;
+            font-style: italic;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #2196f3;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #1976d2;
+        }
+        .save-btn {
+            margin-top: 10px;
+        }
+        .history {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+        }
+        .history-item {
+            margin-bottom: 5px;
+            padding: 5px;
+            border-bottom: 1px solid #eee;
+        }
+        .timestamp {
+            color: #999;
+            font-size: 0.9em;
+        }
+        .nav-buttons {
+            margin-bottom: 20px;
+        }
+        .nav-buttons button {
+            margin-right: 10px;
+        }
+        #save-status {
+            display: none;
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 4px;
+        }
+        .success {
+            background-color: #e8f5e9;
+            color: #2e7d32;
+        }
+        .error {
+            background-color: #ffebee;
+            color: #c62828;
+        }
+    </style>
+</head>
+<body>
+    <div class="nav-buttons">
+        <button onclick="window.location.href='/chat'">Go to Chat</button>
+        <button onclick="refreshData()">Refresh Data</button>
+    </div>
+
+    <div id="categories-container">
+        <!-- Categories will be dynamically populated here -->
+    </div>
+
+    <div id="save-status"></div>
+
+    <script>
+        // Function to load categories and their data
+        async function loadData() {
+            try {
+                const response = await fetch('/categories');
+                const categories = await response.json();
+                const container = document.getElementById('categories-container');
+                container.innerHTML = '';
+
+                for (const category of categories) {
+                    const categoryDiv = document.createElement('div');
+                    categoryDiv.className = 'category';
+                    categoryDiv.innerHTML = `
+                        <h2>${category.name}</h2>
+                        ${category.sections.map(section => {
+                            if (['Cold Turkey', 'iOS Screen Time', 'Fitbit heart rate zones'].includes(section)) {
+                                return `
+                                    <div class="section api-section">
+                                        <h3>${section}</h3>
+                                        <p>This section is populated by ${section} data. Please use the chat interface to share your data.</p>
+                                    </div>
+                                `;
+                            } else {
+                                return `
+                                    <div class="section">
+                                        <h3>${section}</h3>
+                                        <textarea
+                                            id="${category.id}-${section.replace(/ /g, '_')}"
+                                            placeholder="Enter your observations for ${section}..."
+                                            onchange="saveSection('${category.id}', '${section}', this.value)"
+                                        ></textarea>
+                                        <div class="history" id="history-${category.id}-${section.replace(/ /g, '_')}">
+                                            <!-- History items will be loaded here -->
+                                        </div>
+                                    </div>
+                                `;
+                            }
+                        }).join('')}
+                    `;
+                    container.appendChild(categoryDiv);
+                }
+
+                // Load existing data
+                await loadExistingData();
+            } catch (error) {
+                console.error('Error loading data:', error);
+                showStatus('Error loading data. Please try again.', false);
+            }
+        }
+
+        // Function to load existing data for each section
+        async function loadExistingData() {
+            try {
+                const response = await fetch('/get-all-data');
+                const data = await response.json();
+                
+                for (const categoryId in data) {
+                    const categoryData = data[categoryId];
+                    
+                    // Update textareas with latest data
+                    for (const section in categoryData.sections) {
+                        const textarea = document.getElementById(`${categoryId}-${section.replace(/ /g, '_')}`);
+                        if (textarea && categoryData.sections[section].length > 0) {
+                            textarea.value = categoryData.sections[section][0].observation;
+                        }
+
+                        // Update history
+                        const historyDiv = document.getElementById(`history-${categoryId}-${section.replace(/ /g, '_')}`);
+                        if (historyDiv) {
+                            historyDiv.innerHTML = categoryData.sections[section]
+                                .slice(1) // Skip the most recent one since it's in the textarea
+                                .map(item => `
+                                    <div class="history-item">
+                                        <div class="timestamp">${new Date(item.timestamp).toLocaleString()}</div>
+                                        <div>${item.observation}</div>
+                                    </div>
+                                `).join('');
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading existing data:', error);
+                showStatus('Error loading existing data. Please try again.', false);
+            }
+        }
+
+        // Function to save section data
+        async function saveSection(categoryId, sectionName, value) {
+            try {
+                const response = await fetch('/submit', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        category_id: categoryId,
+                        section_name: sectionName,
+                        observations: value
+                    })
+                });
+
+                if (response.ok) {
+                    showStatus('Saved successfully!', true);
+                    // Refresh the history for this section
+                    await loadExistingData();
+                } else {
+                    showStatus('Error saving data. Please try again.', false);
+                }
+            } catch (error) {
+                console.error('Error saving section:', error);
+                showStatus('Error saving data. Please try again.', false);
+            }
+        }
+
+        // Function to show status message
+        function showStatus(message, success) {
+            const statusDiv = document.getElementById('save-status');
+            statusDiv.textContent = message;
+            statusDiv.className = success ? 'success' : 'error';
+            statusDiv.style.display = 'block';
+            setTimeout(() => {
+                statusDiv.style.display = 'none';
+            }, 3000);
+        }
+
+        // Function to refresh data
+        function refreshData() {
+            loadData();
+            showStatus('Data refreshed!', true);
+        }
+
+        // Load data when page loads
+        window.onload = loadData;
+    </script>
+</body>
+</html>

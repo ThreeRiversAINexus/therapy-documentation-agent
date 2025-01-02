@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Therapy Check-in</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .chat-container {
+            position: sticky;
+            top: 20px;
+            background: white;
+            z-index: 100;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            padding: 15px;
+            margin-bottom: 30px;
+        }
+        .chat-messages {
+            height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        .chat-input {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            position: sticky;
+            bottom: 0;
+            background: white;
+            padding: 10px 0;
+        }
+        .chat-input input {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .chat-message {
+            margin: 5px 0;
+            padding: 8px;
+            border-radius: 4px;
+        }
+        .user-message {
+            background-color: #e3f2fd;
+            margin-left: 20%;
+        }
+        .bot-message {
+            background-color: #f5f5f5;
+            margin-right: 20%;
+        }
+        .error-message {
+            color: red;
+            background-color: #ffebee;
+            padding: 8px;
+            border-radius: 4px;
+        }
+        .category {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        .category h2 {
+            margin-top: 0;
+        }
+        .count {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2196f3;
+        }
+        button {
+            padding: 10px 20px;
+            margin-right: 10px;
+            background-color: #2196f3;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #1976d2;
+        }
+        .nav-buttons {
+            margin-bottom: 20px;
+        }
+        #history-button {
+            background-color: #ff9800;
+        }
+        #history-button:hover {
+            background-color: #f57c00;
+        }
+        .joplin-button {
+            background-color: #4caf50;
+        }
+        .joplin-button:hover {
+            background-color: #388e3c;
+        }
+        textarea {
+            width: 100%;
+            min-height: 100px;
+            margin: 10px 0;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            resize: vertical;
+        }
+        .documentation {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #ddd;
+        }
+        #categories {
+            margin-top: 400px; /* Space for chat container */
+            padding-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Therapy Check-in</h1>
+    
+    <div class="nav-buttons">
+        <button id="history-button" onclick="window.location.href='/history'">View History</button>
+    </div>
+
+    <div class="chat-container">
+        <h2>Therapy Documentation Chat</h2>
+        <div class="chat-messages" id="chat-messages"></div>
+        <div class="chat-input">
+            <input type="text" id="chat-input" placeholder="Type your message...">
+            <button onclick="sendMessage()">Send</button>
+        </div>
+    </div>
+
+    <div id="categories">
+        <!-- Categories will be populated here -->
+    </div>
+
+    <script>
+        const headers = {
+            'Content-Type': 'application/json'
+        };
+
+        // Get categories from the server
+        fetch('/categories', {
+            credentials: 'include'
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .catch(error => {
+            console.error('Error fetching categories:', error);
+            document.getElementById('categories').innerHTML = `<p class="error-message">Error loading categories: ${error.message}</p>`;
+        })
+        .then(categories => {
+            if (!categories) return;
+            const container = document.getElementById('categories');
+            categories.forEach(category => {
+                const div = document.createElement('div');
+                div.className = 'category';
+                div.innerHTML = `
+                    <h2>${category.name}</h2>
+                    <p>Count: <span class="count" id="count-${category.id}">0</span></p>
+                    <button onclick="increment('${category.id}')">Increment</button>
+                    <input type="number" id="override-${category.id}" min="0" style="width: 60px;">
+                    <button onclick="override('${category.id}')">Override</button>
+                    
+                    <div class="documentation">
+                        <h3>Documentation</h3>
+                        <label>Observations:</label>
+                        <textarea id="observations-${category.id}" placeholder="Enter observations..."></textarea>
+                        
+                        <label>Next Steps:</label>
+                        <textarea id="next-steps-${category.id}" placeholder="Enter next steps..."></textarea>
+                        
+                        <label>Notes:</label>
+                        <textarea id="notes-${category.id}" placeholder="Enter additional notes..."></textarea>
+                        
+                        <button onclick="saveDocumentation('${category.id}')">Save Documentation</button>
+                        <button class="joplin-button" onclick="generateMarkdown('${category.id}')">Generate Markdown</button>
+                        <button class="joplin-button" onclick="createJoplinNote('${category.id}')" id="joplin-${category.id}">Create Joplin Note</button>
+                    </div>
+                `;
+                container.appendChild(div);
+                
+                // Check if Joplin is available
+                fetch('/joplin-status')
+                    .then(response => response.json())
+                    .then(data => {
+                        const joplinButton = document.getElementById(`joplin-${category.id}`);
+                        joplinButton.style.display = data.available ? 'inline-block' : 'none';
+                    });
+            });
+        });
+
+        function increment(category) {
+            fetch(`/increment/${category}`, {
+                method: 'POST',
+                credentials: 'include'
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById(`count-${category}`).textContent = data.count;
+            });
+        }
+
+        function override(category) {
+            const input = document.getElementById(`override-${category}`);
+            const count = parseInt(input.value);
+            if (!isNaN(count) && count >= 0) {
+                fetch(`/override/${category}/${count}`, {
+                    method: 'POST',
+                    credentials: 'include'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById(`count-${category}`).textContent = data.count;
+                    input.value = '';
+                });
+            }
+        }
+
+        function saveDocumentation(category) {
+            const data = {
+                category: category,
+                observations: document.getElementById(`observations-${category}`).value,
+                next_steps: document.getElementById(`next-steps-${category}`).value,
+                notes: document.getElementById(`notes-${category}`).value
+            };
+
+            fetch('/submit', {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert('Documentation saved successfully!');
+            });
+        }
+
+        function generateMarkdown(category) {
+            const observations = document.getElementById(`observations-${category}`).value;
+            const nextSteps = document.getElementById(`next-steps-${category}`).value;
+            const notes = document.getElementById(`notes-${category}`).value;
+            const count = document.getElementById(`count-${category}`).textContent;
+
+            const markdown = `# ${category} Documentation\n\n` +
+                           `## Count: ${count}\n\n` +
+                           `## Observations\n${observations}\n\n` +
+                           `## Next Steps\n${nextSteps}\n\n` +
+                           `## Notes\n${notes}`;
+
+            // Create a temporary textarea to copy the markdown
+            const textarea = document.createElement('textarea');
+            textarea.value = markdown;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+            
+            alert('Markdown copied to clipboard!');
+        }
+
+        function createJoplinNote(category) {
+            const data = {
+                category: category,
+                observations: document.getElementById(`observations-${category}`).value,
+                next_steps: document.getElementById(`next-steps-${category}`).value,
+                notes: document.getElementById(`notes-${category}`).value,
+                count: document.getElementById(`count-${category}`).textContent
+            };
+
+            fetch('/create-joplin-note', {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert('Note created in Joplin!');
+            });
+        }
+
+        // Chat functionality
+        function sendMessage() {
+            const input = document.getElementById('chat-input');
+            const message = input.value.trim();
+            if (!message) return;
+
+            // Add user message to chat
+            addMessageToChat(message, 'user');
+
+            // Send to server
+            fetch('/chat-message', {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ message: message })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                addMessageToChat(data.message, 'bot');
+                
+                // If we have documentation data, update the form
+                if (data.documentation) {
+                    const category = data.documentation.category;
+                    const formData = data.documentation.data;
+                    const notes = data.documentation.notes;
+                    
+                    if (formData.observations) {
+                        document.getElementById(`observations-${category}`).value = formData.observations;
+                    }
+                    if (formData.next_steps) {
+                        document.getElementById(`next-steps-${category}`).value = formData.next_steps;
+                    }
+                    if (notes) {
+                        document.getElementById(`notes-${category}`).value = notes;
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error sending message:', error);
+                addMessageToChat('Error: Failed to send message. Please try again.', 'error');
+            });
+
+            input.value = '';
+        }
+
+        function addMessageToChat(message, type) {
+            const chatMessages = document.getElementById('chat-messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `chat-message ${type}-message`;
+            messageDiv.textContent = type === 'user' ? 'You: ' + message : 
+                                   type === 'bot' ? 'Bot: ' + message : message;
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Initialize chat
+        fetch('/start-chat', {
+            credentials: 'include'
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.text();
+        })
+        .then(message => {
+            addMessageToChat(message, 'bot');
+        })
+        .catch(error => {
+            console.error('Error starting chat:', error);
+            addMessageToChat('Error: Failed to start chat. Please try refreshing the page.', 'error');
+        });
+
+        // Handle Enter key in chat input
+        document.getElementById('chat-input').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault(); // Prevent form submission
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</html>
