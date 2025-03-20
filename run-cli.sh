@@ -1,4 +1,4 @@
 #!/bin/bash
 
-# Execute CLI mode using docker-ops.sh
-./docker-ops.sh cli "$@"
+# Execute CLI mode using podman-ops.sh
+./podman-ops.sh cli "$@"

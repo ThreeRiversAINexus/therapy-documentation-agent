@@ -19,22 +19,22 @@ git clone <repository-url>
 cd personal_metrics_agent
 ```
 
-2. Run with Docker using the provided operations script:
+2. Run with podman using the provided operations script:
 ```bash
 # Run the main application
-./docker-ops.sh app
+./podman-ops.sh app
 
 # Run in development mode with auto-reload
-./docker-ops.sh dev
+./podman-ops.sh dev
 
 # Run tests
-./docker-ops.sh test
+./podman-ops.sh test
 
 # Run CLI interface
-./docker-ops.sh cli
+./podman-ops.sh cli
 ```
 
-The docker-ops.sh script provides efficient Docker image management:
+The podman-ops.sh script provides efficient podman image management:
 - Automatically caches images based on code changes
 - Reuses existing images when code hasn't changed
 - Maintains only the latest versions to save disk space
@@ -43,10 +43,10 @@ The docker-ops.sh script provides efficient Docker image management:
 3. Create a user account:
 ```bash
 # Get the container ID
-CONTAINER_ID=$(docker ps -qf "name=personal-metrics-agent")
+CONTAINER_ID=$(podman ps -qf "name=personal-metrics-agent")
 
 # Create user
-docker exec -it $CONTAINER_ID python create_user.py <username> <password>
+podman exec -it $CONTAINER_ID python create_user.py <username> <password>
 ```
 
 ## Environment Variables
@@ -58,21 +58,21 @@ docker exec -it $CONTAINER_ID python create_user.py <username> <password>
 
 ## Development
 
-The docker-ops.sh script supports different modes for development:
+The podman-ops.sh script supports different modes for development:
 
 1. Development mode with auto-reload:
 ```bash
-./docker-ops.sh dev
+./podman-ops.sh dev
 ```
 
 2. Run tests:
 ```bash
-./docker-ops.sh test
+./podman-ops.sh test
 ```
 
 3. CLI interface:
 ```bash
-./docker-ops.sh cli
+./podman-ops.sh cli
 ```
 
 ## Project Structure

@@ -2,9 +2,9 @@
 
 # Function to calculate hash of relevant files
 calculate_hash() {
-    local dockerfile=$1
+    local podmanfile=$1
     # Only hash files that have changed in the last hour to improve caching
-    find . -type f \( -name "*.py" -o -name "requirements.txt" -o -name "$dockerfile" \) -mmin -60 -exec sha256sum {} \; 2>/dev/null | sort | sha256sum | cut -d' ' -f1
+    find . -type f \( -name "*.py" -o -name "requirements.txt" -o -name "$podmanfile" \) -mmin -60 -exec sha256sum {} \; 2>/dev/null | sort | sha256sum | cut -d' ' -f1
 }
 
 # Function to clean up old images
@@ -14,12 +14,12 @@ cleanup_images() {
     
     echo "Cleaning up old images..."
     # Remove untagged/dangling images
-    docker image prune -f
+    podman image prune -f
     # Keep only the 2 most recent tagged versions
-    docker images "$prefix:*" --format "{{.ID}} {{.Tag}}" | 
+    podman images "$prefix:*" --format "{{.ID}} {{.Tag}}" | 
         grep -v "$current_hash" | grep -v "latest" |
         sort -k2 -r | tail -n +2 | 
-        awk '{print $1}' | xargs -r docker rmi
+        awk '{print $1}' | xargs -r podman rmi
 }
 
 # Global variable for image tag
@@ -28,35 +28,35 @@ IMAGE_TAG=""
 # Function to build or reuse image
 build_image() {
     local prefix=$1
-    local dockerfile=$2
+    local podmanfile=$2
 
     # Check if rebuild is explicitly requested
     if [ "${FORCE_REBUILD:-false}" = "true" ]; then
         echo "Force rebuild requested..."
-        local hash=$(calculate_hash "$dockerfile")
+        local hash=$(calculate_hash "$podmanfile")
         IMAGE_TAG="$prefix:${hash}"
         
-        if ! docker build -q -t "$IMAGE_TAG" -f "$dockerfile" . > /dev/null; then
-            echo "Docker build failed"
+        if ! podman build -q -t "$IMAGE_TAG" -f "$podmanfile" . > /dev/null; then
+            echo "podman build failed"
             return 1
         fi
-        docker tag "$IMAGE_TAG" "$prefix:latest"
+        podman tag "$IMAGE_TAG" "$prefix:latest"
         cleanup_images "$prefix" "$hash"
     else
         # Use latest tag if it exists, otherwise build new image
-        if docker image inspect "$prefix:latest" >/dev/null 2>&1; then
+        if podman image inspect "$prefix:latest" >/dev/null 2>&1; then
             echo "Using existing latest image"
             IMAGE_TAG="$prefix:latest"
         else
             echo "No existing image found, building new one..."
-            local hash=$(calculate_hash "$dockerfile")
+            local hash=$(calculate_hash "$podmanfile")
             IMAGE_TAG="$prefix:${hash}"
             
-            if ! docker build -q -t "$IMAGE_TAG" -f "$dockerfile" . > /dev/null; then
-                echo "Docker build failed"
+            if ! podman build -q -t "$IMAGE_TAG" -f "$podmanfile" . > /dev/null; then
+                echo "podman build failed"
                 return 1
             fi
-            docker tag "$IMAGE_TAG" "$prefix:latest"
+            podman tag "$IMAGE_TAG" "$prefix:latest"
         fi
     fi
     return 0
@@ -65,8 +65,8 @@ build_image() {
 # Function to stop and remove containers
 cleanup_containers() {
     local prefix=$1
-    docker ps -a | grep "$prefix" | awk '{print $1}' | xargs -r docker stop
-    docker ps -a | grep "$prefix" | awk '{print $1}' | xargs -r docker rm
+    podman ps -a | grep "$prefix" | awk '{print $1}' | xargs -r podman stop
+    podman ps -a | grep "$prefix" | awk '{print $1}' | xargs -r podman rm
 }
 
 # Parse command line arguments
@@ -76,20 +76,20 @@ shift
 case "$MODE" in
     "app")
         cleanup_containers "personal-metrics-agent"
-        if ! build_image "personal-metrics-agent" "Dockerfile"; then
+        if ! build_image "personal-metrics-agent" "podmanfile"; then
             exit 1
         fi
-        docker run -d -p 5000:5000 \
+        podman run -d -p 5000:5000 \
             -v "$(pwd)/data:/app/data" \
             -e OPENAI_API_KEY="$OPENAI_API_KEY" \
             "$IMAGE_TAG" "$@"
         ;;
     "test")
         cleanup_containers "personal-metrics-agent-test"
-        if ! build_image "personal-metrics-agent-test" "Dockerfile.test"; then
+        if ! build_image "personal-metrics-agent-test" "podmanfile.test"; then
             exit 1
         fi
-        docker run --rm \
+        podman run --rm \
             -v "$(pwd):/app" \
             -v "$(pwd)/data:/app/data" \
             -e OPENAI_API_KEY="$OPENAI_API_KEY" \
@@ -98,10 +98,10 @@ case "$MODE" in
         ;;
     "cli")
         cleanup_containers "personal-metrics-agent-cli"
-        if ! build_image "personal-metrics-agent-cli" "Dockerfile.test"; then
+        if ! build_image "personal-metrics-agent-cli" "podmanfile.test"; then
             exit 1
         fi
-        docker run --rm -it \
+        podman run --rm -it \
             -v "$(pwd):/app" \
             -v "$(pwd)/data:/app/data" \
             -e OPENAI_API_KEY="$OPENAI_API_KEY" \
@@ -111,10 +111,10 @@ case "$MODE" in
         ;;
     "dev")
         cleanup_containers "personal-metrics-agent"
-        if ! build_image "personal-metrics-agent" "Dockerfile"; then
+        if ! build_image "personal-metrics-agent" "Podmanfile"; then
             exit 1
         fi
-        docker run -d -p 5000:5000 \
+        podman run -d -p 5000:5000 \
             -v "$(pwd):/app" \
             -v "$(pwd)/data:/app/data" \
             -e FLASK_ENV=development \
